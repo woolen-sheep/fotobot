@@ -1,0 +1,19 @@
+[Unit]
+Description=Fotobot RS Telegram bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=fotobot
+Group=fotobot
+Environment="BOT_TOKEN=REPLACE_WITH_TELEGRAM_BOT_TOKEN"
+Environment="TG_ID=REPLACE_WITH_TELEGRAM_API_ID"
+Environment="TG_HASH=REPLACE_WITH_TELEGRAM_API_HASH"
+ExecStart=/usr/local/bin/fotobot_rs
+Restart=on-failure
+RestartSec=5s
+WorkingDirectory=/var/lib/fotobot
+
+[Install]
+WantedBy=multi-user.target

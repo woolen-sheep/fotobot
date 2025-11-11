@@ -1,0 +1,19 @@
+[package]
+name = "fotobot_rs"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+http-range-client = "0.9.1"
+env_logger = "0.11"
+exif = { package = "kamadak-exif", version = "0.6.1" }
+anyhow = "1"
+log = "0.4"
+teloxide = { version = "0.12", features = ["macros"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+grammers-client = { git = "https://github.com/woolen-sheep/grammers", branch = "feat-file-header", features = ["fs"] }
+grammers-mtsender = { git = "https://github.com/woolen-sheep/grammers", branch = "feat-file-header" }
+grammers-session = { git = "https://github.com/woolen-sheep/grammers", branch = "feat-file-header" }
+reqwest = { version = "0.11", default-features = false, features = ["blocking", "json", "rustls-tls"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
