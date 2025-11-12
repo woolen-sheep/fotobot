@@ -1,0 +1,17 @@
+version: "3.9"
+
+services:
+  fotobot:
+    image: ${FOTOBOT_IMAGE:-woolensheep/fotobot:latest}
+    container_name: fotobot_rs
+    restart: unless-stopped
+    environment:
+        BOT_TOKEN: "replace-with-telegram-bot-token"
+        TG_ID: "replace-with-telegram-api-id"
+        TG_HASH: "replace-with-telegram-api-hash"
+    volumes:
+      # Use a managed volume so the fotobot user keeps write access to the session file.
+      - fotobot_sessions:/home/fotobot/.config/fotobot
+
+volumes:
+  fotobot_sessions:

@@ -16,6 +16,12 @@ Fotobot RS is a high-performance Telegram bot focused on lightning-fast EXIF ext
 - `cargo build` to compile the project
 - `cargo run` to launch the bot (ensure your Telegram API credentials and bot token are configured)
 
+## 🐳 Docker Compose
+- Copy `docker-compose.yaml.example` to `docker-compose.yaml` and adjust the `environment` values for `BOT_TOKEN`, `TG_ID`, and `TG_HASH`.
+- Either publish the image (see workflow above) or build locally with `docker compose build` to populate `FOTOBOT_IMAGE`.
+- Launch the stack with `docker compose up -d` and verify logs via `docker compose logs -f`.
+- Persisted session data lives in the managed `fotobot_sessions` volume; remove it with `docker volume rm fotobot_sessions` if you need a clean login.
+
 ## 🧭 Systemd Service
 - Copy `fotobot.service.example` to `/etc/systemd/system/fotobot.service` and adjust `User`, `Group`, `WorkingDirectory`, and `ExecStart` to match your setup.
 - Replace the placeholder values in the `Environment=` lines with the real `BOT_TOKEN`, `TG_ID`, and `TG_HASH`.
