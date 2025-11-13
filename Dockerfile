@@ -22,8 +22,9 @@ RUN mkdir src \
     && cargo fetch \
     && rm -rf src
 
-# Copy the actual source code.
+# Copy the actual source code and localization files (required at compile time by rust-i18n).
 COPY src ./src
+COPY locales ./locales
 
 # Build the release binary.
 RUN cargo build --release
@@ -38,9 +39,9 @@ RUN addgroup -S fotobot \
     && mkdir -p /app/cache /home/fotobot/.config/fotobot \
     && chown -R fotobot:fotobot /app /home/fotobot
 
-# Copy the statically linked binary from the builder stage.
+# Copy the statically linked binary and compiled-in locales from the builder stage.
 COPY --from=builder /app/target/release/fotobot_rs /usr/local/bin/fotobot_rs
-COPY locales /app/locales
+COPY --from=builder --chown=fotobot:fotobot /app/locales /app/locales
 
 ENV HOME=/home/fotobot
 ENV RUST_LOG=info
