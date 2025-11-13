@@ -1,0 +1,4 @@
+messages:
+  resend_document: "Telegram compresses photos and strips their EXIF metadata. Please resend the image as a file/document to keep the EXIF information intact."
+  process_error: "Sorry, I couldn't read the EXIF data from that image."
+  request_image: "Please send an image document or file."

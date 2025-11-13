@@ -12,7 +12,7 @@ use serde_json::Value as JsonValue;
 
 /// Downloads the image from the given URL and returns a textual summary of the
 /// leading bytes and EXIF metadata.
-pub fn summarize_exif(url: &str) -> Result<String> {
+pub fn summarize_exif(url: &str, accept_language: Option<&str>) -> Result<String> {
     let mut reader = HttpReader::new(url);
     reader.set_min_req_size(500 * 1024);
 
@@ -29,12 +29,12 @@ pub fn summarize_exif(url: &str) -> Result<String> {
         Err(err) => return Err(err.into()),
     };
 
-    let summary = ParsedExif::from_exif(&exif);
+    let summary = ParsedExif::from_exif(&exif, accept_language);
     Ok(build_caption(&summary))
 }
 
 /// Reads EXIF data from a local file and returns the formatted summary.
-pub fn summarize_exif_from_file(path: &Path) -> Result<String> {
+pub fn summarize_exif_from_file(path: &Path, accept_language: Option<&str>) -> Result<String> {
     let file = File::open(path)
         .with_context(|| format!("Failed to open local image at `{}`", path.display()))?;
     let mut buf_reader = BufReader::new(file);
@@ -46,7 +46,7 @@ pub fn summarize_exif_from_file(path: &Path) -> Result<String> {
         Err(err) => return Err(err.into()),
     };
 
-    let summary = ParsedExif::from_exif(&exif);
+    let summary = ParsedExif::from_exif(&exif, accept_language);
     Ok(build_caption(&summary))
 }
 
@@ -74,10 +74,10 @@ struct GpsData {
 }
 
 const NOMINATIM_ENDPOINT: &str = "https://nominatim.openstreetmap.org/reverse";
-const NOMINATIM_USER_AGENT: &str = "fotobot_rs/0.1 (https://github.com/user/fotobot_rs)";
+const NOMINATIM_USER_AGENT: &str = "fotobot_rs/0.1.0 (https://github.com/woolen-sheep/fotobot)";
 
 impl ParsedExif {
-    fn from_exif(exif: &Exif) -> Self {
+    fn from_exif(exif: &Exif, accept_language: Option<&str>) -> Self {
         let title = first_string(exif, &[Tag::ImageDescription]);
 
         let make = first_string(exif, &[Tag::Make]);
@@ -104,7 +104,7 @@ impl ParsedExif {
         let gps_data = gps_coordinates(exif);
         let geocoded = gps_data
             .as_ref()
-            .and_then(|gps| reverse_geocode(gps.latitude, gps.longitude));
+            .and_then(|gps| reverse_geocode(gps.latitude, gps.longitude, accept_language));
 
         let (fallback_location, fallback_country) = location_values(exif);
 
@@ -465,10 +465,21 @@ fn normalized_gps_ref(reference: &str, default: char) -> char {
         .unwrap_or(default)
 }
 
-fn reverse_geocode(lat: f64, lon: f64) -> Option<String> {
+fn reverse_geocode(lat: f64, lon: f64, accept_language: Option<&str>) -> Option<String> {
+    let language = accept_language
+        .and_then(|code| {
+            let trimmed = code.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.replace('_', "-"))
+            }
+        })
+        .unwrap_or_else(|| String::from("en"));
+
     let url = format!(
-        "{}?lat={:.6}&lon={:.6}&addressdetails=0&accept-language=zh-cn&format=json",
-        NOMINATIM_ENDPOINT, lat, lon
+        "{}?lat={:.6}&lon={:.6}&addressdetails=0&accept-language={}&format=json",
+        NOMINATIM_ENDPOINT, lat, lon, language
     );
 
     let client = Client::new();
