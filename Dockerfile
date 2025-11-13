@@ -40,6 +40,7 @@ RUN addgroup -S fotobot \
 
 # Copy the statically linked binary from the builder stage.
 COPY --from=builder /app/target/release/fotobot_rs /usr/local/bin/fotobot_rs
+COPY locales /app/locales
 
 ENV HOME=/home/fotobot
 ENV RUST_LOG=info
