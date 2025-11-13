@@ -3,9 +3,7 @@ name: Release and Publish
 on:
   push:
     branches:
-      - main
-    paths:
-      - 'Cargo.toml'
+      - fix-i18n-permissions
 
 permissions:
   contents: write
