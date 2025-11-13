@@ -20,6 +20,8 @@ use tokio::{fs, task};
 
 mod exif;
 
+rust_i18n::i18n!("locales");
+
 const MAX_INLINE_SIZE: u64 = 20 * 1024 * 1024; // 20 MB telegram download limit.
 
 enum ImageSelection {
@@ -65,14 +67,41 @@ async fn handle_message(
     let chat_id = msg.chat.id;
     let message_id = msg.id.0;
     let username = msg.chat.username().map(|name| name.to_string());
+    let user_language = msg.from().and_then(|user| user.language_code.clone());
+    let locale = locale_from_language_code(user_language.as_deref());
 
-    log::info!("username {}", msg.chat.username().unwrap_or("<unknown>"));
+    log::info!(
+        "username {}, language {}",
+        msg.chat.username().unwrap_or("<unknown>"),
+        user_language.as_deref().unwrap_or("<unknown>")
+    );
+
+    if let MessageKind::Common(common) = &msg.kind {
+        if matches!(common.media_kind, MediaKind::Photo(_)) {
+            bot.send_message(
+                chat_id,
+                rust_i18n::t!("messages.resend_document", locale = locale),
+            )
+            .await?;
+            return Ok(());
+        }
+    }
+
     if let Some(selection) = image_file_id(&msg) {
         let processing_result = match selection {
             ImageSelection::Inline {
                 file_id,
                 media_kind,
-            } => process_image(&bot, chat_id, &file_id, media_kind, extra_client.clone()).await,
+            } => {
+                process_image(
+                    &bot,
+                    chat_id,
+                    &file_id,
+                    media_kind,
+                    user_language.as_deref(),
+                )
+                .await
+            }
             ImageSelection::TooLarge {
                 file_id,
                 media_kind,
@@ -89,6 +118,7 @@ async fn handle_message(
                     &file_id,
                     media_kind,
                     username.as_deref(),
+                    user_language.as_deref(),
                 )
                 .await
             }
@@ -98,13 +128,16 @@ async fn handle_message(
             log::error!("Failed to process image: {err:?}");
             bot.send_message(
                 chat_id,
-                "Sorry, I couldn't read the EXIF data from that image.",
+                rust_i18n::t!("messages.process_error", locale = locale),
             )
             .await?;
         }
     } else {
-        bot.send_message(chat_id, "Please send a photo or an image document.")
-            .await?;
+        bot.send_message(
+            chat_id,
+            rust_i18n::t!("messages.request_image", locale = locale),
+        )
+        .await?;
     }
 
     Ok(())
@@ -115,7 +148,7 @@ async fn process_image(
     chat_id: ChatId,
     file_id: &str,
     media_kind: ReceivedImage,
-    _extra_client: GramClient,
+    language_code: Option<&str>,
 ) -> Result<()> {
     let token = bot_token_from_env()?;
 
@@ -128,10 +161,13 @@ async fn process_image(
 
     let exif_report = {
         let url_for_task = file_url.clone();
-        task::spawn_blocking(move || exif::summarize_exif(&url_for_task))
-            .await
-            .context("Failed to join EXIF parsing task")?
-            .context("Failed to parse EXIF data")?
+        let accept_language = language_code.map(|code| code.to_string());
+        task::spawn_blocking(move || {
+            exif::summarize_exif(&url_for_task, accept_language.as_deref())
+        })
+        .await
+        .context("Failed to join EXIF parsing task")?
+        .context("Failed to parse EXIF data")?
     };
 
     let caption = enforce_caption_limit(exif_report);
@@ -147,6 +183,7 @@ async fn process_large_image(
     file_id: &str,
     media_kind: ReceivedImage,
     username: Option<&str>,
+    language_code: Option<&str>,
 ) -> Result<()> {
     let message = fetch_secondary_message(extra_client, chat_id, message_id, username)
         .await?
@@ -163,7 +200,6 @@ async fn process_large_image(
         .as_millis();
 
     let extension = match media_kind {
-        ReceivedImage::Photo => "jpg",
         ReceivedImage::Document => "bin",
     };
 
@@ -192,9 +228,12 @@ async fn process_large_image(
         .context("Failed to persist downloaded media to cache")?;
 
     let path_for_task = local_path.clone();
-    let exif_report = task::spawn_blocking(move || exif::summarize_exif_from_file(&path_for_task))
-        .await
-        .context("Failed to join EXIF parsing task for local file")??;
+    let accept_language = language_code.map(|code| code.to_string());
+    let exif_report = task::spawn_blocking(move || {
+        exif::summarize_exif_from_file(&path_for_task, accept_language.as_deref())
+    })
+    .await
+    .context("Failed to join EXIF parsing task for local file")??;
 
     let caption = enforce_caption_limit(exif_report);
 
@@ -346,19 +385,34 @@ async fn resolve_peer_for_chat(
 
 #[derive(Clone, Copy)]
 enum ReceivedImage {
-    Photo,
     Document,
+}
+
+fn locale_from_language_code(language_code: Option<&str>) -> &'static str {
+    let Some(code) = language_code
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty())
+    else {
+        return "en";
+    };
+
+    let normalized = code.replace('_', "-").to_ascii_lowercase();
+
+    if is_simplified_chinese_code(&normalized) {
+        "zh-CN"
+    } else {
+        "en"
+    }
+}
+
+fn is_simplified_chinese_code(code: &str) -> bool {
+    matches!(code,"zh") || code.starts_with("zh-")
 }
 
 fn image_file_id(msg: &Message) -> Option<ImageSelection> {
     if let MessageKind::Common(common) = &msg.kind {
         match &common.media_kind {
-            MediaKind::Photo(photo) => {
-                let last = photo.photo.last()?;
-                let file_id = last.file.id.clone();
-                let size = file_meta_size_bytes(&last.file);
-                Some(select_image(file_id, ReceivedImage::Photo, size))
-            }
+            MediaKind::Photo(_) => None,
             MediaKind::Document(doc) => {
                 let is_image = doc
                     .document
@@ -424,12 +478,6 @@ async fn send_caption_for_media(
     caption: String,
 ) -> Result<()> {
     match media_kind {
-        ReceivedImage::Photo => {
-            bot.send_photo(chat_id, InputFile::file_id(file_id.to_owned()))
-                .caption(caption)
-                .await
-                .context("Failed to send EXIF summary photo")?;
-        }
         ReceivedImage::Document => {
             bot.send_document(chat_id, InputFile::file_id(file_id.to_owned()))
                 .caption(caption)

@@ -1,6 +1,6 @@
 [package]
 name = "fotobot_rs"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 
 [dependencies]
@@ -17,3 +17,4 @@ grammers-session = { git = "https://github.com/woolen-sheep/grammers", branch = 
 reqwest = { version = "0.11", default-features = false, features = ["blocking", "json", "rustls-tls"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+rust-i18n = "3"

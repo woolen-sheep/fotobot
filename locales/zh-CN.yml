@@ -1,0 +1,4 @@
+messages:
+  resend_document: "Telegram 会压缩照片并移除 EXIF 元数据。请以文件/文档的形式重新发送图片以保留 EXIF 信息。"
+  process_error: "抱歉，我无法读取该图片的 EXIF 数据。"
+  request_image: "请发送图片文件。"
