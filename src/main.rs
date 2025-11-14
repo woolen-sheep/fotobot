@@ -48,9 +48,22 @@ async fn main() -> Result<()> {
 
     let bot_token = bot_token_from_env()?;
     let bot = Bot::new(bot_token.clone());
-    let extra_client = init_extra_client(&bot_token).await?;
+    let extra_client = Arc::new(init_extra_client(&bot_token).await?);
 
-    Dispatcher::builder(bot, Update::filter_message().endpoint(handle_message))
+    let handler = Update::filter_message().endpoint(
+        |bot: Bot, extra_client: Arc<GramClient>, msg: Message| async move {
+            // Detach the heavy handler so the dispatcher keeps polling new updates.
+            tokio::spawn(async move {
+                if let Err(err) = handle_message(bot, extra_client, msg).await {
+                    log::error!("Failed to process update concurrently: {err:?}");
+                }
+            });
+
+            respond(())
+        },
+    );
+
+    Dispatcher::builder(bot, handler)
         .dependencies(dptree::deps![extra_client])
         .build()
         .dispatch()
@@ -61,7 +74,7 @@ async fn main() -> Result<()> {
 
 async fn handle_message(
     bot: Bot,
-    extra_client: GramClient,
+    extra_client: Arc<GramClient>,
     msg: Message,
 ) -> Result<(), teloxide::RequestError> {
     let chat_id = msg.chat.id;
@@ -112,7 +125,7 @@ async fn handle_message(
                 );
                 process_large_image(
                     &bot,
-                    &extra_client,
+                    extra_client.as_ref(),
                     chat_id,
                     message_id,
                     &file_id,
